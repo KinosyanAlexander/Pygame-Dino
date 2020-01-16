@@ -1,2 +1,4 @@
 # Pygame-Dino
-Just Google Dino on pygame
+
+<b>Google Dino on pygame<\b>
+
