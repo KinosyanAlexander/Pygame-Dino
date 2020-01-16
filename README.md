@@ -1,4 +1,4 @@
 # Pygame-Dino
 
-<b>Google Dino on pygame<\b>
+<b>Google Dino on pygame</b>
 
