@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import pygame
-from PIL import Image
 import os
 from copy import deepcopy
 import random as rn
