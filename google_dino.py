@@ -39,6 +39,7 @@ BLACK = (0, 0, 0)
 is_full_screen = 1
 is_game_now = False
 space_from_enemy = list(range(600, 850))
+enemy_levels = (300, 340, 380)
 restart = True
 game_over = False
 FPS = 60
@@ -60,8 +61,10 @@ sc = pygame.display.set_mode((w, h), pygame.FULLSCREEN)
 pygame.font.init()
 myfont = pygame.font.SysFont('sitkasmallsitkatextbolditalicsitkasubheadingbolditalicsitkaheadingbolditalicsitkadisplaybolditalicsitkabannerbolditalic', 50)
 
-
-
+pygame.mixer.init()
+jump_sound = pygame.mixer.Sound('data\\sounds\\jump.wav')
+game_over_sound = pygame.mixer.Sound('data\\sounds\\game_over.wav')
+sourse_point_sound = pygame.mixer.Sound('data\\sounds\\chekpoint.wav')
 
 pole_im = load_image('pole.png', -1)
 
@@ -69,7 +72,13 @@ dino_front_im = [load_image('dino\\front.png', -1)][0]
 dino_beg_anim = [load_image(f'dino\\beg{i + 1}.png', -1) for i in range(2)]
 dino_prignut_anim = [load_image(f'dino\\prignut{i + 1}.png', BLACK) for i in range(2)]
 
-small_cactuses_im = [load_image(f'cactuses\\small{i + 1}.png', BLACK) for i in range(1)]
+small_cactuses_im = [load_image(f'cactuses\\small{i + 1}.png', BLACK) for i in range(3)]
+big_cactuses_im = [load_image(f'cactuses\\big{i + 1}.png', BLACK) for i in range(3)]
+all_cactuses_im = [small_cactuses_im, big_cactuses_im]
+
+bird_anim = [load_image(f'bird\\bird{i + 1}.png', BLACK) for i in range(2)]
+
+
 
 game_over_im = load_image(f'game_over.png', BLACK)
 rect_game_over = game_over_im.get_rect()
@@ -82,22 +91,22 @@ rect_restart_button.center = (rect_game_over.width // 2 + rect_game_over.left, r
 class Pole(pygame.sprite.Sprite):
     image = pole_im
     
-    def __init__(self, pos):
+    def __init__(self, pos, v):
         pygame.sprite.Sprite.__init__(self)
         
-        self.v  = 10
+        self.v = v
         self.rect = self.image.get_rect()
         self.rect.bottomleft = pos
     
     def update(self):
         if is_game_now:
-            self.rect.x -= self.v
+            self.rect.x -= int(self.v)
         if self.rect.bottomright[0] >= 0 :
             self.draw()
         else:
             self.kill()
         if max([i.rect.right for i in pole]) <= w:
-            pole.add(Pole((self.rect.bottomright)))
+            pole.add(Pole(self.rect.bottomright, self.v))
     
     def draw(self):
         sc.blit(self.image, self.rect)
@@ -140,7 +149,8 @@ class Dino(pygame.sprite.Sprite):
         
         self.draw()
         
-        if pygame.sprite.spritecollide(self, cactuses, False, collided=pygame.sprite.collide_mask) or pygame.sprite.spritecollide(self, birds, False, collided=pygame.sprite.collide_mask):
+        if pygame.sprite.spritecollide(self, enemies, False, collided=pygame.sprite.collide_mask):
+            game_over_sound.play()
             is_game_now = False
             restart = False
             game_over = True
@@ -152,8 +162,11 @@ class Dino(pygame.sprite.Sprite):
 
     def jump(self):
         if self.jump_v >= self.MAX_JUMP * -1:
+            if self.jump_v == self.MAX_JUMP:
+                jump_sound.play()
             self.pos[1] -= self.jump_v / self.g#(self.jump_v ** 2) / 2
             self.jump_v -= self.g
+            
         else:
             self.jump_v = self.MAX_JUMP
             self.is_jump = False
@@ -176,17 +189,59 @@ class Cactus(pygame.sprite.Sprite):
         sc.blit(self.image, self.rect)
     
     def update(self):
-        self.pos[0] -= pole.sprites()[-1].v
+        self.pos[0] -= int(pole.sprites()[-1].v)
         
         if self.pos[0] <= self.start_position - self.space and not self.is_plod:
-            cactus = Cactus(small_cactuses_im[0], self.pos[0] + self.space)
-            cactuses.add(cactus)
+            enemy = rn.choice([Cactus(rn.choice(rn.choice(all_cactuses_im)), self.pos[0] + self.space),
+                               Bird(self.pos[0] + self.space, rn.choice(enemy_levels))])
+            enemies.add(enemy)
             self.is_plod = True
 
         if self.rect.right < 0:
             self.kill()
         
         self.draw()
+
+class Bird(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.pos = [x, y]
+        self.anim_sp = bird_anim
+        self.image = self.anim_sp[0]
+        
+        self.rect = self.image.get_rect()
+        self.rect.bottomleft = self.pos
+        
+        self.c = 0
+        self.lim_anim = 20
+        
+        self.space = rn.choice(space_from_enemy)
+        self.start_position = self.pos[0]
+        self.is_plod = False
+    
+    def update(self):
+
+        self.c += 1
+        self.image = self.anim_sp[(self.c // (self.lim_anim // len(self.anim_sp))) % len(self.anim_sp)]
+        
+        #self.pos[0] -= pole.sprites()[-1].v
+        
+        self.rect.move_ip((int(-pole.sprites()[-1].v), 0))
+        
+        
+        if self.rect.left <= self.start_position - self.space and not self.is_plod:
+            enemy = rn.choice([Cactus(rn.choice(rn.choice(all_cactuses_im)), self.rect.left + self.space),
+                               Bird(self.rect.left + self.space, rn.choice(enemy_levels))])
+            enemies.add(enemy)
+            self.is_plod = True
+
+        if self.rect.right < 0:
+            self.kill()
+        self.draw()
+    
+    def draw(self):
+        #self.rect.bottomleft = self.pos
+        sc.blit(self.image, self.rect)
 
 class Numbers():
     def __init__(self, pos, color, numb=score, changable=True, pristavka=''):
@@ -201,6 +256,14 @@ class Numbers():
         if self.changable:
             self.numb += 10 / FPS
             self.surf = myfont.render(self.pristavka + str(int(self.numb)).rjust(5, '0'), False, (self.color))
+            if not self.pristavka:
+                #print(self.numb)
+                if not int(self.numb) % 100 and 0 < self.numb <= 800:
+                    for i in pole:
+                        i.v += 10/FPS
+                if not int(self.numb) % 100 and int(self.numb + 10 / FPS) % 100 and self.numb > 99:
+                    sourse_point_sound.play()
+                #print(pole.sprites()[0].v)
         else:
             if int(self.numb) <= int(score_widget.numb):
                 self.changable = True
@@ -210,28 +273,19 @@ class Numbers():
         sc.blit(self.surf, self.pos)
 
 
-    
-    
-
-
-
-
-
-
 def settings():
-    global pole, dino, cactuses, birds, restart, score_widget, hi_score_widget
+    global pole, dino, enemies, restart, score_widget, hi_score_widget
     pole = pygame.sprite.Group()
 
 
-    pole.add(Pole((0, h - 50)))
+    pole.add(Pole((0, h - 50), 10))
 
     dino = Dino()
 
 
-    cactuses = pygame.sprite.Group()
-    cactuses.add(Cactus(small_cactuses_im[0], w + 1000))
+    enemies = pygame.sprite.Group()
+    enemies.add(Cactus(small_cactuses_im[0], w + 1000))
     
-    birds = pygame.sprite.Group()
     
     
     surface_of_myfont = myfont.render(str(int(score)).rjust(5, '0'), False, (BLACK))
@@ -246,10 +300,6 @@ def settings():
     
     
     restart = False
-    
-
-
-
 
 
 settings()
@@ -291,7 +341,7 @@ while run:
         settings()
     if not is_game_now:
         pole.draw(sc)
-        cactuses.draw(sc)
+        enemies.draw(sc)
         dino.draw()
         score_widget.draw()
         hi_score_widget.draw()
@@ -300,7 +350,7 @@ while run:
             sc.blit(restart_button_im, rect_restart_button)
     elif is_game_now:
         pole.update()
-        cactuses.update()
+        enemies.update()
         dino.update(keys)
         score_widget.update()
         hi_score_widget.update()
